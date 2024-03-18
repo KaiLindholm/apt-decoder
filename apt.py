@@ -1,9 +1,8 @@
-import numpy
+import numpy as np
 import scipy.io.wavfile
 import scipy.signal
 import sys
-import PIL
-
+from PIL import Image
 
 class APT(object):
 
@@ -17,33 +16,36 @@ class APT(object):
 
         # Keep only one channel if audio is stereo
         if self.signal.ndim > 1:
-            self.signal = self.signal[:, 0]
+            left = self.signal[:, 0]
+            right = self.signal[:, 1]
+            self.signal = right #(left + right) / 2
 
         truncate = self.RATE * int(len(self.signal) // self.RATE)
         self.signal = self.signal[:truncate]
 
     def decode(self, outfile=None):
-        hilbert = scipy.signal.hilbert(self.signal)
-        filtered = scipy.signal.medfilt(numpy.abs(hilbert), 5)
+        hilbert = scipy.signal.hilbert(self.signal) # envoloping 
+        filtered = scipy.signal.medfilt(np.abs(hilbert), 5)
         reshaped = filtered.reshape(len(filtered) // 5, 5)
-        digitized = self._digitize(reshaped[:, 2])
+        digitized = self._digitize(reshaped[:, 2])        
         matrix = self._reshape(digitized)
-        image = PIL.Image.fromarray(matrix)
+        image = Image.fromarray(matrix)
         if not outfile is None:
             image.save(outfile)
         image.show()
+        
         return matrix
 
     def _digitize(self, signal, plow=0.5, phigh=99.5):
         '''
         Convert signal to numbers between 0 and 255.
         '''
-        (low, high) = numpy.percentile(signal, (plow, phigh))
+        (low, high) = np.percentile(signal, (plow, phigh))
         delta = high - low
-        data = numpy.round(255 * (signal - low) / delta)
+        data = np.round(255 * (signal - low) / delta)
         data[data < 0] = 0
         data[data > 255] = 255
-        return data.astype(numpy.uint8)
+        return data.astype(np.uint8)
 
     def _reshape(self, signal):
         '''
@@ -69,7 +71,7 @@ class APT(object):
         signalshifted = [x-128 for x in signal]
         syncA = [x-128 for x in syncA]
         for i in range(len(signal)-len(syncA)):
-            corr = numpy.dot(syncA, signalshifted[i : i+len(syncA)])
+            corr = np.dot(syncA, signalshifted[i : i+len(syncA)])
 
             # if previous peak is too far, keep it and add this value to the
             # list as a new peak
@@ -86,7 +88,7 @@ class APT(object):
         for i in range(len(peaks) - 1):
             matrix.append(signal[peaks[i][0] : peaks[i][0] + 2080])
 
-        return numpy.array(matrix)
+        return np.array(matrix)
 
 
 if __name__ == '__main__':
